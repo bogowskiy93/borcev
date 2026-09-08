@@ -242,93 +242,6 @@ img { max-width: 100%; display: block; }
   isolation: isolate;
 }
 
-/* Затемнение слева — текст читается поверх летающих превью */
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 80% at 18% 50%, rgba(0, 0, 0, 0.92) 0%, transparent 70%),
-    linear-gradient(90deg, var(--bg) 0%, rgba(0, 0, 0, 0.75) 32%, transparent 62%);
-}
-
-/* ─── Летающие превью на фоне ─── */
-.float-field {
-  position: absolute;
-  inset: -4%;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.float-item {
-  position: absolute;
-  left: var(--x, 50%);
-  top: var(--y, 50%);
-  width: var(--size, 160px);
-  aspect-ratio: 3 / 2;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  pointer-events: auto;
-  opacity: 0;
-  transform: translate3d(0, 20px, 0);
-  transition: opacity 0.7s ease, transform 0.7s ease;
-  animation: var(--anim, float-drift-a) var(--dur, 26s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-  animation-play-state: paused;
-  will-change: transform;
-}
-.float-item.ready {
-  opacity: var(--op, 0.42);
-  transform: translate3d(0, 0, 0);
-  animation-play-state: running;
-}
-.float-item:hover {
-  opacity: 0.85;
-  z-index: 2;
-  filter: brightness(1.08);
-}
-.float-item img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  user-select: none;
-  -webkit-user-drag: none;
-  filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.55));
-  pointer-events: none;
-}
-
-@keyframes float-drift-a {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg); }
-  25%       { transform: translate3d(18px, -28px, 0) rotate(1.5deg); }
-  50%       { transform: translate3d(-12px, -48px, 0) rotate(-1deg); }
-  75%       { transform: translate3d(22px, -22px, 0) rotate(2deg); }
-}
-@keyframes float-drift-b {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(1deg); }
-  33%       { transform: translate3d(-24px, -20px, 0) rotate(-2deg); }
-  66%       { transform: translate3d(14px, -42px, 0) rotate(1.5deg); }
-}
-@keyframes float-drift-c {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  20%       { transform: translate3d(10px, -16px, 0) rotate(2deg); }
-  55%       { transform: translate3d(-20px, -36px, 0) rotate(-1.5deg); }
-  80%       { transform: translate3d(16px, -10px, 0) rotate(1deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .float-item {
-    animation: none !important;
-  }
-}
-
 .hero-about {
   position: relative;
   z-index: 2;
@@ -514,30 +427,34 @@ img { max-width: 100%; display: block; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100% - 32px);
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 10px 16px;
   transition: color 0.2s;
 }
-.hero-cta:hover { color: var(--text); }
+.hero-cta:hover { color: #fff; }
 
 .hero-cta-arrow {
-  width: 22px;
-  height: 22px;
+  width: 34px;
+  height: 34px;
+  stroke-width: 2;
   animation: cta-bounce 1.6s ease-in-out infinite;
 }
 
 .hero-cta span {
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 @keyframes cta-bounce {
-  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  0%, 100% { transform: translateY(0); opacity: 0.9; }
   50%       { transform: translateY(5px); opacity: 1; }
 }
 
@@ -1074,12 +991,6 @@ body.q-select-mode .work-card.q-selected .work-title {
     justify-content: flex-start;
   }
 
-  /* Затемнение только над блоком с текстом */
-  .hero::before {
-    background:
-      linear-gradient(180deg, var(--bg) 0%, rgba(0, 0, 0, 0.9) 22%, rgba(0, 0, 0, 0.45) 36%, transparent 48%);
-  }
-
   .hero-about {
     width: 100%;
     align-items: flex-start;
@@ -1087,12 +998,6 @@ body.q-select-mode .work-card.q-selected .work-title {
     padding-top: clamp(48px, 12vh, 96px);
   }
   .about-name { white-space: normal; }
-
-  /* Превью по всему экрану — позиции задаёт JS (обходят блок текста) */
-  .float-field {
-    inset: -4%;
-  }
-  .float-item { --size: 120px !important; }
 
   .hero-cta {
     bottom: 18px;
@@ -1133,11 +1038,6 @@ body.q-select-mode .work-card.q-selected .work-title {
 
 /* ═══ ADAPTIVE: MOBILE ═══ */
 @media (max-width: 600px) {
-  .hero::before {
-    background:
-      linear-gradient(180deg, var(--bg) 0%, rgba(0, 0, 0, 0.92) 18%, rgba(0, 0, 0, 0.4) 30%, transparent 42%);
-  }
-
   .about-inner { padding: 20px 18px 12px; }
   .hero-about { padding-top: clamp(56px, 14vh, 110px); }
   .about-name { font-size: 1.85rem; margin-bottom: 10px; }
@@ -1146,12 +1046,11 @@ body.q-select-mode .work-card.q-selected .work-title {
   .contacts   { gap: 10px; }
   .contact-link { font-size: 0.72rem; }
   .label { margin-bottom: 8px; }
-  .float-item { --size: 100px !important; }
 
   .hero-cta {
     bottom: 14px;
   }
-  .hero-cta span { font-size: 0.62rem; }
+  .hero-cta span { font-size: 0.85rem; }
 
   .works-row {
     grid-template-columns: repeat(2, 1fr);

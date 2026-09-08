@@ -80,14 +80,12 @@ function hideSplash() {
 
 // ─── Инициализация после обнаружения моделей ─────────────────────
 const worksRow   = document.getElementById('works-row');
-const floatField = document.getElementById('float-field');
 const heroCta    = document.getElementById('hero-cta');
 const galleryEl  = document.getElementById('gallery');
 const toTopBtn   = document.getElementById('to-top');
 
 let projects = [];
 const cardImages = [];
-const floatItems = []; // { btn, img }
 
 // Скролл вниз только по кнопке
 document.documentElement.classList.add('scroll-locked');
@@ -191,7 +189,6 @@ discoverProjects()
     projects = discovered;
     setSplashProgress(0, projects.length);
     projects.forEach((project, idx) => buildCard(project, idx));
-    buildFloatField();
     return loadPreviews();
   })
   .catch((err) => {
@@ -202,112 +199,6 @@ discoverProjects()
   .finally(() => {
     clearTimeout(splashFailsafe);
   });
-
-function buildFloatField() {
-  if (!floatField || !projects.length) return;
-
-  // Сохраняем уже загруженные src, чтобы при rebuild не мигало
-  const prevSrc = floatItems.map((it) => it?.img?.src || '');
-
-  floatField.innerHTML = '';
-  floatItems.length = 0;
-
-  const anims = ['float-drift-a', 'float-drift-b', 'float-drift-c'];
-  const isMobile = window.matchMedia('(max-width: 900px)').matches;
-
-  // Desktop: справа от текста. Mobile: везде, кроме верхней зоны с информацией
-  const slots = isMobile
-    ? [
-        // под блоком info — на всю ширину
-        [6, 34],  [26, 32], [48, 36], [70, 34], [88, 38],
-        [12, 46], [34, 44], [56, 48], [78, 46], [94, 50],
-        [4, 58],  [24, 56], [46, 60], [68, 58], [86, 62],
-        [10, 70], [32, 68], [54, 72], [76, 70], [92, 74],
-        [8, 82],  [28, 80], [50, 84], [72, 82], [90, 86],
-        [16, 92], [40, 90], [64, 94], [84, 88],
-        // по бокам от текста (края, не центр)
-        [2, 8],   [90, 6],  [4, 18],  [92, 16], [0, 26], [96, 24],
-        [18, 40], [82, 42], [38, 52], [60, 54],
-      ]
-    : [
-        [58, 8],  [78, 14], [92, 28], [68, 32],
-        [84, 48], [96, 62], [62, 58], [74, 74],
-        [88, 82], [52, 22], [48, 72], [70, 6],
-        [55, 42], [90, 40], [64, 88], [82, 22],
-        [46, 12], [98, 10], [50, 50], [76, 56],
-        [60, 18], [86, 70], [54, 84], [72, 44],
-        [94, 52], [66, 66], [80, 8],  [58, 36],
-        [48, 28], [92, 78], [70, 92], [84, 34],
-        [52, 64], [78, 88], [62, 4],  [88, 56],
-        [56, 78],
-      ];
-
-  let slotIdx = 0;
-  projects.forEach((project, idx) => {
-    // Скрытые в манифесте не летают в hero
-    if (project.hidden) {
-      floatItems.push(null);
-      return;
-    }
-
-    const [x, y] = slots[slotIdx % slots.length];
-    const size = isMobile
-      ? 88 + ((slotIdx * 29) % 48)
-      : 110 + ((slotIdx * 37) % 90);
-    const dur = 22 + ((slotIdx * 13) % 18);
-    const delay = -((slotIdx * 1.7) % 20);
-    const op = 0.28 + ((slotIdx * 17) % 22) / 100;
-    const anim = anims[slotIdx % anims.length];
-    const jx = ((slotIdx * 19) % 11) - 5;
-    const jy = ((slotIdx * 23) % 9) - 4;
-    slotIdx++;
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'float-item';
-    btn.setAttribute('aria-label', project.title);
-    btn.style.setProperty('--x', `${Math.min(96, Math.max(0, x + jx))}%`);
-    btn.style.setProperty('--y', `${Math.min(94, Math.max(0, y + jy))}%`);
-    btn.style.setProperty('--size', `${size}px`);
-    btn.style.setProperty('--dur', `${dur}s`);
-    btn.style.setProperty('--delay', `${delay}s`);
-    btn.style.setProperty('--op', String(op));
-    btn.style.setProperty('--anim', anim);
-
-    const img = document.createElement('img');
-    img.alt = '';
-    img.draggable = false;
-    btn.appendChild(img);
-
-    if (project.model) {
-      btn.addEventListener('click', () => openModal(idx));
-    }
-
-    floatField.appendChild(btn);
-    floatItems.push({ btn, img });
-
-    const src = prevSrc[idx] || (cardImages[idx]?.img?.src) || project.preview || '';
-    if (src) revealFloat(idx, src);
-  });
-}
-
-// При смене ширины (телефон ↔ десктоп) пересобираем позиции
-let _floatMobile = window.matchMedia('(max-width: 900px)').matches;
-window.addEventListener('resize', () => {
-  const now = window.matchMedia('(max-width: 900px)').matches;
-  if (now === _floatMobile || !projects.length) return;
-  _floatMobile = now;
-  buildFloatField();
-});
-
-function revealFloat(idx, src) {
-  const item = floatItems[idx];
-  if (!item || !src) return;
-  item.img.src = src;
-  item.img.onload = () => item.btn.classList.add('ready');
-  // если уже в кэше
-  if (item.img.complete && item.img.naturalWidth) item.btn.classList.add('ready');
-}
 
 function buildCard(project, idx, { animate = true } = {}) {
   const card = document.createElement('div');
@@ -329,7 +220,6 @@ function buildCard(project, idx, { animate = true } = {}) {
   img.onload = () => {
     spinner.style.display = 'none';
     img.style.display = 'block';
-    revealFloat(idx, img.src);
   };
   thumb.appendChild(img);
 
@@ -513,8 +403,6 @@ async function rebuildGallery(nextProjects, { editMode = false, previewById = {}
       cardImages[i].img.style.display = 'block';
     }
   });
-
-  if (!editMode) buildFloatField();
 
   // Догрузить превью тем, у кого ещё нет картинки
   const packMap = (await loadPicPack()) || {};
@@ -786,7 +674,6 @@ async function loadPreviews() {
     const packed = packMap[projects[i].id];
     if (packed) {
       cardImages[i].img.src = packed;
-      revealFloat(i, packed);
       fromPack++;
       loaded++;
       setSplashProgress(loaded, total);
@@ -795,7 +682,6 @@ async function loadPreviews() {
 
     if (projects[i].preview) {
       cardImages[i].img.src = projects[i].preview;
-      revealFloat(i, projects[i].preview);
       loaded++;
       setSplashProgress(loaded, total);
       continue;
@@ -813,7 +699,6 @@ async function loadPreviews() {
       try {
         const dataURL = await generatePreview(projects[i]);
         cardImages[i].img.src = dataURL;
-        revealFloat(i, dataURL);
       } catch (err) {
         console.warn(`[preview] failed for ${projects[i].id}:`, err);
         cardImages[i].spinner.style.display = 'none';
