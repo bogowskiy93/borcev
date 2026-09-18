@@ -1,6 +1,6 @@
 import { Viewer } from './viewer.js';
 
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const PREVIEW_W = 600;
 const PREVIEW_H = 400;
 const POOL_SIZE = 2; // больше — больше WebGL-контекстов и риск дропа

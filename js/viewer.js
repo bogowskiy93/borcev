@@ -3,13 +3,14 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { packSpecularPixels, getNormalScale } from './material-maps.js';
 
 export class Viewer {
   /**
    * @param {HTMLCanvasElement} canvas
    * @param {{ interactive?: boolean, fastPreview?: boolean }} opts
    *   interactive=false — без контролов, без resize observer
-   *   fastPreview=true — только diffuse, без normal/spec и инверсий (для миниатюр)
+   *   fastPreview=true — только первая расцветка, с normal/spec (для миниатюр)
    */
   constructor(canvas, { interactive = true, fastPreview = false, alpha = false } = {}) {
     this.canvas = canvas;
@@ -21,6 +22,7 @@ export class Viewer {
     this.mode = 'material';
     this.variants = [];      // массив THREE.Texture для разных расцветок
     this.currentVariant = 0;
+    this._modelTextures = new Set();
     this._animId = null;
     this._init();
   }
@@ -145,6 +147,7 @@ export class Viewer {
       t.anisotropy = maxAniso;
       t.minFilter = THREE.LinearMipmapLinearFilter;
       t.colorSpace = colorSpace;
+      this._modelTextures.add(t);
     };
 
     const loadTexAsync = (filename, colorSpace = THREE.NoColorSpace) =>
@@ -157,48 +160,38 @@ export class Viewer {
         );
       });
 
-    // Грузит изображение, инвертирует пиксели на canvas (spec → roughness).
-    const loadInvertedTexAsync = (filename) =>
-      new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const c = document.createElement('canvas');
-          c.width = img.width;
-          c.height = img.height;
-          const ctx = c.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const data = ctx.getImageData(0, 0, c.width, c.height);
-          for (let i = 0; i < data.data.length; i += 4) {
-            data.data[i]     = 255 - data.data[i];
-            data.data[i + 1] = 255 - data.data[i + 1];
-            data.data[i + 2] = 255 - data.data[i + 2];
-          }
-          ctx.putImageData(data, 0, 0);
-          const tex = new THREE.CanvasTexture(c);
-          setupTex(tex);
-          tex.needsUpdate = true;
-          resolve(tex);
-        };
-        img.onerror = (e) => { console.warn('[Viewer] inverted load failed:', filename, e); resolve(null); };
-        img.src = path + filename + v;
-      });
-
     // Список вариантов diffuse-карт. Поддержка legacy textures.map.
     const mapList = textures.maps || (textures.map ? [textures.map] : []);
     // Для превью грузим только первую, для интерактива — все
     const variantsToLoad = this.fastPreview ? mapList.slice(0, 1) : mapList;
 
-    const [variantTexs, normalTex, roughnessTex, metalnessTex] = await Promise.all([
+    const [variantTexs, normalTex, specTex, roughnessTex, metalnessTex] = await Promise.all([
       Promise.all(variantsToLoad.map((f) => loadTexAsync(f, THREE.SRGBColorSpace))),
-      this.fastPreview ? null : (textures.normalMap    ? loadTexAsync(textures.normalMap) : null),
-      this.fastPreview ? null : (
-        textures.specMap      ? loadInvertedTexAsync(textures.specMap)
-        : textures.roughnessMap ? loadTexAsync(textures.roughnessMap)
-        : null
-      ),
-      this.fastPreview ? null : (textures.metalnessMap ? loadTexAsync(textures.metalnessMap) : null),
+      textures.normalMap ? loadTexAsync(textures.normalMap) : null,
+      textures.specMap ? loadTexAsync(textures.specMap) : null,
+      textures.roughnessMap ? loadTexAsync(textures.roughnessMap) : null,
+      textures.metalnessMap ? loadTexAsync(textures.metalnessMap) : null,
     ]);
+
+    let packedSpecTex = null;
+    if (specTex) {
+      const { width, height } = specTex.image;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(specTex.image, 0, 0);
+      const source = ctx.getImageData(0, 0, width, height).data;
+      const pixels = packSpecularPixels(source, textures.specularFalloff, textures.specularIntensity);
+      // DataTexture preserves RGB even where intensity (alpha) is zero.
+      packedSpecTex = new THREE.DataTexture(pixels, width, height);
+      packedSpecTex.flipY = specTex.flipY;
+      packedSpecTex.generateMipmaps = true;
+      packedSpecTex.magFilter = THREE.LinearFilter;
+      setupTex(packedSpecTex);
+      packedSpecTex.needsUpdate = true;
+    }
+    const materialRoughness = roughnessTex || packedSpecTex;
 
     this.variants = variantTexs.filter(Boolean);
     this.currentVariant = 0;
@@ -207,7 +200,7 @@ export class Viewer {
     // Сохраняем ссылки на все каналы — для режимов просмотра текстур
     this.channelTextures = {
       normal:   normalTex    || null,
-      spec:     roughnessTex || null,  // spec/roughness
+      spec:     specTex || roughnessTex || null, // исходная карта, без преобразования
       uv:       this._getUVChecker(),
     };
 
@@ -217,12 +210,14 @@ export class Viewer {
       const oldMat = Array.isArray(child.material) ? child.material[0] : child.material;
       const mapTex = initialMap || oldMat?.map || null;
 
-      child.material = new THREE.MeshStandardMaterial({
+      child.material = new THREE.MeshPhysicalMaterial({
         map:          mapTex,
         normalMap:    normalTex,
-        normalScale:  new THREE.Vector2(1, 1),
-        roughnessMap: roughnessTex,
-        roughness:    roughnessTex ? 1.0 : 0.85,
+        normalScale:  new THREE.Vector2(...getNormalScale(textures.normalFormat)),
+        roughnessMap: materialRoughness,
+        roughness:    materialRoughness ? 1.0 : 0.85,
+        specularIntensityMap: packedSpecTex,
+        specularIntensity: packedSpecTex ? 1.0 : 0.25,
         metalnessMap: metalnessTex,
         metalness:    metalnessTex ? 1.0 : 0.0,
         side:         THREE.DoubleSide,
@@ -333,7 +328,9 @@ export class Viewer {
         try {
           await this._applyPBRTextures(object, textures, path, version);
         } catch (e) {
-          console.warn('[Viewer] textures error:', e);
+          console.error('[Viewer] textures error:', e);
+          reject(e);
+          return;
         }
         object.traverse((c) => { if (c.isMesh) c.material.side = THREE.DoubleSide; });
         this._fitCamera(object, !this.interactive);
@@ -357,7 +354,9 @@ export class Viewer {
         );
       };
 
-      if (mtl) {
+      // Explicit PNG maps replace MTL materials, which often reference absent DDS files.
+      const hasExplicitBase = textures?.maps?.length || textures?.map;
+      if (mtl && !hasExplicitBase) {
         const mtlLoader = new MTLLoader();
         mtlLoader.setPath(path);
         mtlLoader.load(mtl + v, loadOBJ, undefined, () => {
@@ -371,6 +370,11 @@ export class Viewer {
   }
 
   _clearObject() {
+    this._modelTextures.forEach((texture) => texture.dispose());
+    this._modelTextures.clear();
+    this.variants = [];
+    this.currentVariant = 0;
+    this.channelTextures = {};
     if (!this.currentObject) return;
     // Убираем все wireframe-оверлеи
     this._removeWireOverlays(this.currentObject);
@@ -381,6 +385,7 @@ export class Viewer {
       const mats = Array.isArray(c.material) ? c.material : [c.material];
       mats.forEach((m) => m.dispose());
     });
+    this.originalMaterials.forEach(({ mat }) => mat.dispose());
     this.currentObject = null;
     this.originalMaterials = [];
   }
@@ -407,6 +412,7 @@ export class Viewer {
       if (!child.isMesh || child.userData.isWireOverlay) return;
       const entry = this.originalMaterials.find((e) => e.mesh === child);
       if (!entry) return;
+      const previousMaterials = Array.isArray(child.material) ? child.material : [child.material];
 
       if (mode === 'material') {
         const m = entry.mat.clone();
@@ -472,6 +478,9 @@ export class Viewer {
           side: THREE.DoubleSide,
         });
       }
+      previousMaterials.forEach((material) => {
+        if (material !== child.material) material.dispose();
+      });
     });
   }
 
@@ -496,6 +505,7 @@ export class Viewer {
     if (this._resizeObs) this._resizeObs.disconnect();
     if (this.controls) this.controls.dispose();
     this._clearObject();
+    this._uvCheckerTex?.dispose();
     this.renderer.dispose();
   }
 }
