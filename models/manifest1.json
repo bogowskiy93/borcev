@@ -1,5 +1,39 @@
 [
   {
+    "id": "m929",
+    "title": "m929",
+    "year": 2026,
+    "client": "—",
+    "purpose": "Game-ready asset",
+    "obj": "Untitled.obj",
+    "mtl": "Untitled.mtl",
+    "textures": {
+      "maps": [
+        "base1.png"
+      ],
+      "normalMap": "normal.png",
+      "specMap": "spec.png"
+    }
+  },
+  {
+    "id": "m930",
+    "title": "m930",
+    "year": 2026,
+    "client": "—",
+    "purpose": "Game-ready asset",
+    "obj": "Untitled.obj",
+    "mtl": "Untitled.mtl",
+    "textures": {
+      "maps": [
+        "base1.png",
+        "base2.png",
+        "base3.png"
+      ],
+      "normalMap": "normal.png",
+      "specMap": "spec.png"
+    }
+  },
+  {
     "id": "m931",
     "title": "m931",
     "year": 2026,
